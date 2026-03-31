@@ -150,11 +150,40 @@ MIIEvgIBADANBgkqhkiG9w0BAQE...
 
 ### UUID
 **Input:** `550e8400-e29b-41d4-a716-446655440000`
-**Expected Output:** `[UUID]`
+**Expected Output (default settings):** `550e8400-e29b-41d4-a716-446655440000`
+
+**Expected Output (UUID option enabled):** `[UUID]`
 
 ### Network Interface
 **Input:** `eth0 failed, eth1 active`
-**Expected Output:** `[INTERFACE] failed, [INTERFACE] active`
+**Expected Output (default settings):** `eth0 failed, eth1 active`
+
+**Expected Output (Interface option enabled):** `[INTERFACE] failed, [INTERFACE] active`
+
+## Option Profiles
+
+### Public Sharing Defaults
+Use the default UI options when preparing content for:
+
+- public forums
+- AI assistants
+- vendor tickets
+- screenshots shared outside the team
+
+Expected behavior:
+
+- secrets always redacted
+- financial data redacted
+- IPs, domains, emails, usernames, and file paths redacted
+- UUIDs and interface names preserved unless explicitly enabled
+
+### Internal Colleague Debugging
+For trusted internal troubleshooting, UUIDs and interface names may be useful to keep visible.
+
+Suggested behavior:
+
+- leave defaults on for secrets, credentials, financial data, and user-identifying infrastructure data
+- enable UUID/interface masking only if those identifiers are considered sensitive in your environment
 
 ## Edge Cases
 
@@ -183,8 +212,9 @@ MIIEvgIBADANBgkqhkiG9w0BAQE...
 
 To validate changes:
 1. Copy test cases above into the input area
-2. Check diff preview for each pattern
-3. Verify redaction summary counts match expected tags
-4. Look for false positives (things that shouldn't be redacted)
-5. Look for false negatives (things that should be but aren't)
+2. Validate both default behavior and any optional category you enable
+3. Check diff preview for each pattern
+4. Verify redaction summary counts match expected tags
+5. Look for false positives (things that shouldn't be redacted)
+6. Look for false negatives (things that should be but aren't)
 

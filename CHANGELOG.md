@@ -5,6 +5,17 @@ All notable changes to Data Sanitizer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Selectable redaction categories in the UI for tailoring output to public sharing or internal debugging
+- Safe defaults that keep secrets, credentials, personal data, network details, and user-specific paths redacted
+- Optional UUID and interface-name masking for stricter sharing requirements
+- Reset-to-defaults action for quickly restoring the recommended protection baseline
+
+### Changed
+- Documentation now explains which categories are safe to preserve for colleague-facing troubleshooting and which should stay redacted for external sharing
+
 ## [1.0.0] - 2026-03-03
 
 ### Added
