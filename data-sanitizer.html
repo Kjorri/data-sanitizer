@@ -319,6 +319,62 @@ password for webuser: xY9$mK2#pL8@</pre>
 
 <h1>Sensitive Data Scrubber</h1>
 
+<details id="optionsPanel" open>
+<summary style="cursor: pointer; font-weight: bold; color: var(--accent); margin-bottom: 15px;">⚙️ Redaction Options</summary>
+<div style="background: var(--input-bg); padding: 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid var(--accent);">
+    
+    <h3 style="margin-top: 0; color: var(--accent); font-size: 1.1em;">Critical Secrets (Always Recommended)</h3>
+    <label style="display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="opt-secrets" checked disabled> 
+        <strong>🔐 Secrets & Keys</strong> — Private keys, JWT tokens, AWS keys, Passwords, API tokens
+    </label>
+    <label style="display: block; margin-bottom: 15px;">
+        <input type="checkbox" id="opt-financial" checked> 
+        <strong>💳 Financial Data</strong> — Credit cards, IBANs, Finnish personal IDs
+    </label>
+
+    <h3 style="margin-top: 15px; color: var(--accent); font-size: 1.1em;">Network & Access Info (Default ON)</h3>
+    <label style="display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="opt-ips" checked> 
+        <strong>🌐 IP Addresses</strong> — IPv4, IPv6 (remove public IPs)
+    </label>
+    <label style="display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="opt-mac" checked> 
+        <strong>📱 MAC Addresses</strong> — Hardware identifiers
+    </label>
+    <label style="display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="opt-fqdn" checked> 
+        <strong>🔗 Domain Names (FQDN)</strong> — Example.com, subdomains
+    </label>
+    <label style="display: block; margin-bottom: 15px;">
+        <input type="checkbox" id="opt-email" checked> 
+        <strong>📧 Email Addresses</strong> — Remove recipient/sender data
+    </label>
+
+    <h3 style="margin-top: 15px; color: var(--accent); font-size: 1.1em;">User & System Info (Default ON)</h3>
+    <label style="display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="opt-userhost" checked> 
+        <strong>👤 Username@Host</strong> — Shell prompts, SSH commands
+    </label>
+    <label style="display: block; margin-bottom: 15px;">
+        <input type="checkbox" id="opt-paths" checked> 
+        <strong>📂 File Paths</strong> — Windows & Unix paths (often contain usernames)
+    </label>
+
+    <h3 style="margin-top: 15px; color: var(--accent); font-size: 1.1em;">Debug Info (Safe for Colleagues)</h3>
+    <label style="display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="opt-uuid"> 
+        <strong>🔑 UUIDs</strong> — Request/transaction IDs (usually not sensitive)
+    </label>
+    <label style="display: block; margin-bottom: 15px;">
+        <input type="checkbox" id="opt-interface"> 
+        <strong>🔌 Interface Names</strong> — eth0, vlan100, ge-0/0/0 (network debugging)
+    </label>
+
+    <button onclick="resetToDefaults()" style="margin-top: 10px; padding: 6px 12px; background: #ccc; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Reset to Defaults</button>
+</div>
+</details>
+
 <h2>Input</h2>
 <label for="input">Input text</label>
 <textarea id="input"></textarea>
@@ -505,11 +561,24 @@ function matchesCardIssuer(num) {
 }
 
 /* -------------------------------
-   SCRUB FUNCTION
+   SCRUB FUNCTION (Options-aware)
 -------------------------------- */
-function scrub(text) {
+function scrub(text, options = {}) {
+    // Default options
+    const opts = {
+        secrets: options.secrets !== false,          // Always true
+        financial: options.financial !== false,      // Credit cards, IBAN, Finnish ID
+        ips: options.ips !== false,                  // IPv4, IPv6
+        mac: options.mac !== false,                  // MAC addresses
+        fqdn: options.fqdn !== false,                // Domain names
+        email: options.email !== false,              // Email addresses
+        userhost: options.userhost !== false,        // USERNAME@HOST
+        paths: options.paths !== false,              // File paths
+        uuid: options.uuid === true,                 // UUID (off by default)
+        interface: options.interface === true        // Interface names (off by default)
+    };
 
-    // 1) High-risk secret patterns first
+    // 1) High-risk secret patterns first (ALWAYS apply)
     const highRiskRules = [
         [/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+PRIVATE KEY-----/g, "[PRIVATE_KEY]"],
         [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[JWT]"],
@@ -524,82 +593,67 @@ function scrub(text) {
         text = text.replace(regex, replacement);
     }
 
-    // 2) Shell-specific user@host patterns (avoid broad word replacements)
-    text = text.replace(/\[{1,2}[A-Za-z0-9._-]+@[A-Za-z0-9_-]+\]{1,2}/g, "[USER]@[HOST]");
-    text = text.replace(/\b[A-Za-z0-9._-]+@[A-Za-z0-9_-]+\b(?=\s*(?:~|\$|#|%|>|:))/g, "[USER]@[HOST]");
+    // 2) Shell-specific user@host patterns
+    if (opts.userhost) {
+        text = text.replace(/\[{1,2}[A-Za-z0-9._-]+@[A-Za-z0-9_-]+\]{1,2}/g, "[USER]@[HOST]");
+        text = text.replace(/\b[A-Za-z0-9._-]+@[A-Za-z0-9_-]+\b(?=\s*(?:~|\$|#|%|>|:))/g, "[USER]@[HOST]");
 
-    // SSH/SCP/rsync/sftp commands with user@host patterns
-    text = text.replace(/\b(ssh|scp|sftp|rsync)\s+(?:-[A-Za-z0-9]+\s+)*([A-Za-z0-9._-]+@)([A-Za-z0-9.-]+)/gi, 
-        (match, cmd, user, host) => match.replace(/[A-Za-z0-9._-]+@[A-Za-z0-9.-]+/, "[USER]@[FQDN]"));
+        // SSH/SCP/rsync/sftp commands with user@host patterns
+        text = text.replace(/\b(ssh|scp|sftp|rsync)\s+(?:-[A-Za-z0-9]+\s+)*([A-Za-z0-9._-]+@)([A-Za-z0-9.-]+)/gi, 
+            (match, cmd, user, host) => match.replace(/[A-Za-z0-9._-]+@[A-Za-z0-9.-]+/, "[USER]@[FQDN]"));
 
-    // password for <username>: <value>
-    text = text.replace(/\bpassword for\s+([A-Za-z0-9._-]+)\s*:\s*([^\s,;]+)/gi, "password for [USER]: [REDACTED]");
+        // password for <username>: <value>
+        text = text.replace(/\bpassword for\s+([A-Za-z0-9._-]+)\s*:\s*([^\s,;]+)/gi, "password for [USER]: [REDACTED]");
 
-    // password for <username>
-    text = text.replace(/\bpassword for\s+([A-Za-z0-9._-]+)\b/gi, "password for [USER]");
+        // password for <username>
+        text = text.replace(/\bpassword for\s+([A-Za-z0-9._-]+)\b/gi, "password for [USER]");
 
-    // sudo -u <username>
-    text = text.replace(/-u\s+([A-Za-z0-9._-]+)\b/g, "-u [USER]");
-
-    // ---------------------------------------------
-    // 1. Replace domain inside http/https URLs but keep protocol
-    // ---------------------------------------------
-    text = text.replace(/\b(https?:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b/g,
-        (_, proto) => proto + "[FQDN]"
-    );
-
-    // ---------------------------------------------
-    // 2. Replace standalone FQDNs
-    // ---------------------------------------------
-    text = text.replace(/\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b/g, "[FQDN]");
-
-    // 5) General patterns
-    const rules = [
-        // interface names
-        [/(ge-\d+\/\d+\/\d+|xe-\d+\/\d+\/\d+|eth\d+|vlan\d+)/gi, "[INTERFACE]"],
-
-        // emails
-        [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]"],
-
-        // IPv4
-        [/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g, "[IP]"],
-
-        // IPv6
-        [/\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/g, "[IP6]"],
-
-        // MAC
-        [/\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g, "[MAC]"],
-
-        // UUID
-        [/\b[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\b/g, "[UUID]"],
-
-        // Windows paths
-        [/[A-Za-z]:\\[^\r\n<>:"|?*']+/g, "[PATH]"],
-
-        // Unix paths
-        [/(\/(?:Users|home|etc|var|opt|srv|private|Library|Applications)(?:\/[^\s,:;]+)+)/g, "[PATH]"],
-
-        // Finnish ID
-        [/\b\d{6}[+\-A]\d{3}[0-9A-Za-z]\b/g, "[FINNISH_ID]"],
-
-        // IBAN
-        [/\bFI\d{16}\b/g, "[IBAN]"]
-    ];
-
-    // Run all rule-based replacements
-    for (const [regex, replacement] of rules) {
-        text = text.replace(regex, replacement);
+        // sudo -u <username>
+        text = text.replace(/-u\s+([A-Za-z0-9._-]+)\b/g, "-u [USER]");
     }
 
-    // 4) Handle credit cards with explicit label
-    text = text.replace(/\bcredit card\s*:\s*([0-9 -]{13,19})/gi, "Credit Card: [CREDIT_CARD]");
+    // 3) URLs and FQDNs
+    if (opts.fqdn) {
+        // Replace domain inside http/https URLs but keep protocol
+        text = text.replace(/\b(https?:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b/g,
+            (_, proto) => proto + "[FQDN]"
+        );
 
-    // 5) Handle credit cards with Luhn + issuer checks
-    text = text.replace(/\b(?:\d[ -]?){13,19}\b/g, m => {
-        const digits = m.replace(/[ -]/g, "");
-        if (!/^\d+$/.test(digits)) return m;
-        return luhnValid(digits) && matchesCardIssuer(digits) ? "[CREDIT_CARD]" : m;
-    });
+        // Replace standalone FQDNs
+        text = text.replace(/\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b/g, "[FQDN]");
+    }
+
+    // 4) Conditional rules based on options
+    const conditionalRules = [
+        [opts.interface, /(ge-\d+\/\d+\/\d+|xe-\d+\/\d+\/\d+|eth\d+|vlan\d+)/gi, "[INTERFACE]"],
+        [opts.email, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]"],
+        [opts.ips, /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g, "[IP]"],
+        [opts.ips, /\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/g, "[IP6]"],
+        [opts.mac, /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g, "[MAC]"],
+        [opts.uuid, /\b[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\b/g, "[UUID]"],
+        [opts.paths, /[A-Za-z]:\\[^\r\n<>:"|?*']+/g, "[PATH]"],
+        [opts.paths, /(\/(?:Users|home|etc|var|opt|srv|private|Library|Applications)(?:\/[^\s,:;]+)+)/g, "[PATH]"],
+        [opts.financial, /\b\d{6}[+\-A]\d{3}[0-9A-Za-z]\b/g, "[FINNISH_ID]"],
+        [opts.financial, /\bFI\d{16}\b/g, "[IBAN]"]
+    ];
+
+    for (const [enabled, regex, replacement] of conditionalRules) {
+        if (enabled) {
+            text = text.replace(regex, replacement);
+        }
+    }
+
+    // 5) Handle credit cards with explicit label
+    if (opts.financial) {
+        text = text.replace(/\bcredit card\s*:\s*([0-9 -]{13,19})/gi, "Credit Card: [CREDIT_CARD]");
+
+        // Handle credit cards with Luhn + issuer checks
+        text = text.replace(/\b(?:\d[ -]?){13,19}\b/g, m => {
+            const digits = m.replace(/[ -]/g, "");
+            if (!/^\d+$/.test(digits)) return m;
+            return luhnValid(digits) && matchesCardIssuer(digits) ? "[CREDIT_CARD]" : m;
+        });
+    }
 
     return text;
 }
@@ -675,11 +729,46 @@ let lastInputText = "";
 let lastOutputText = "";
 
 /* -------------------------------
+   Get current scrubbing options
+-------------------------------- */
+function getOptions() {
+    return {
+        secrets: true,  // Always true
+        financial: document.getElementById("opt-financial").checked,
+        ips: document.getElementById("opt-ips").checked,
+        mac: document.getElementById("opt-mac").checked,
+        fqdn: document.getElementById("opt-fqdn").checked,
+        email: document.getElementById("opt-email").checked,
+        userhost: document.getElementById("opt-userhost").checked,
+        paths: document.getElementById("opt-paths").checked,
+        uuid: document.getElementById("opt-uuid").checked,
+        interface: document.getElementById("opt-interface").checked
+    };
+}
+
+/* -------------------------------
+   Reset to defaults
+-------------------------------- */
+function resetToDefaults() {
+    document.getElementById("opt-financial").checked = true;
+    document.getElementById("opt-ips").checked = true;
+    document.getElementById("opt-mac").checked = true;
+    document.getElementById("opt-fqdn").checked = true;
+    document.getElementById("opt-email").checked = true;
+    document.getElementById("opt-userhost").checked = true;
+    document.getElementById("opt-paths").checked = true;
+    document.getElementById("opt-uuid").checked = false;
+    document.getElementById("opt-interface").checked = false;
+    cleanText();
+}
+
+/* -------------------------------
    Clean button handler
 -------------------------------- */
 function cleanText() {
     const input = document.getElementById("input").value;
-    const cleaned = scrub(input);
+    const options = getOptions();
+    const cleaned = scrub(input, options);
 
     lastInputText = input;
     lastOutputText = cleaned;
@@ -699,6 +788,13 @@ document.getElementById("input").addEventListener("paste", () => {
 
 document.getElementById("onlyChanges").addEventListener("change", () => {
     document.getElementById("preview").innerHTML = generatePreview(lastInputText, lastOutputText);
+});
+
+/* Add event listeners to option checkboxes */
+document.querySelectorAll('#optionsPanel input[type="checkbox"]').forEach(checkbox => {
+    if (checkbox.id.startsWith('opt-')) {
+        checkbox.addEventListener("change", cleanText);
+    }
 });
 
 /* -------------------------------
