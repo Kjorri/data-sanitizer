@@ -1,8 +1,8 @@
 ## ☕ Support
 If you like this project, consider supporting:
+
 <a href="https://www.buymeacoffee.com/Kjorri" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
-[![Buy Me a Coffee](https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=YOURNAME&button_colour=FFDD00&font_colour=000000&font_family=Arial&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/Kjorri)
 # Data Sanitizer
 
 A lightweight, client-side web tool for removing sensitive data from logs, configs, and command outputs before sharing them safely with AI assistants or in public forums.
